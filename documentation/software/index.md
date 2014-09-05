@@ -99,7 +99,7 @@ Make sure you have speakers or headphones connected to the audio jack of your Pi
 aplay -D hw:1,0 temp.wav
 {% endhighlight %}
 
-Add the following line to the end of ~/.bash_profile:
+Add the following line to the end of ~/.bash_profile (you may need to run `touch ~/.bash_profile` if the file doesn't exist already):
 
 {% highlight bash %}
 export LD_LIBRARY_PATH="/usr/local/lib"
@@ -148,91 +148,94 @@ sudo make install
 
 Once the installations are complete, restart your Pi.
 
-<h2 class="linked" id='configure-wireless'><a href="#configure-wireless" title="Permalink to this headline">Configure Wireless</a></h2>
+<h2 class="linked" id='install-binaries'><a href="#install-binaries" title="Permalink to this headline">Install CMUCLMTK, OpenFST, MIT Language Modeling Toolkit, m2m-aligner, Phonetisaurus</a></h2>
 
-To configure wireless access, first install the following libraries:
+Note that some of these installation steps take more time to complete than previous steps.
+
+Begin by installing some dependencies:
 
 {% highlight bash %}
-sudo apt-get install dhcp3-server hostapd udhcpd
+sudo apt-get install subversion autoconf libtool automake gfortran g++ --yes
 {% endhighlight %}
 
-Next, insert the following lines to the end of /etc/dhcp/dhcpd.conf:
+Next, move into your home (or Jasper) directory to check out and install CMUCLMTK:
 
 {% highlight bash %}
-ddns-update-style interim;
-default-lease-time 600;
-max-lease-time 7200;
-authoritative;
-log-facility local7;
-subnet 192.168.1.0 netmask 255.255.255.0 {
-  range 192.168.1.5 192.168.1.150;
-}
+svn co https://svn.code.sf.net/p/cmusphinx/code/trunk/cmuclmtk/
+cd cmuclmtk/
+sudo ./autogen.sh && sudo make && sudo make install
+cd ..
 {% endhighlight %}
 
-And the following to the end of /etc/udhcpd.conf:
+Then, when you've left the CMUCLTK directory, download the following libraries:
 
 {% highlight bash %}
-start 192.168.42.2 # This is the range of IPs that the hostspot will give to client devices.
-end 192.168.42.20
-interface wlan0 # The device uDHCP listens on.
-remaining yes
-opt dns 8.8.8.8 4.2.2.2 # The DNS servers client devices will use.
-opt subnet 255.255.255.0
-opt router 192.168.42.1 # The Pi's IP address on wlan0 which we will set up shortly.
-opt lease 864000 # 10 day DHCP lease time in seconds
+wget http://distfiles.macports.org/openfst/openfst-1.3.3.tar.gz
+wget https://mitlm.googlecode.com/files/mitlm-0.4.1.tar.gz
+wget https://m2m-aligner.googlecode.com/files/m2m-aligner-1.2.tar.gz
+wget https://phonetisaurus.googlecode.com/files/phonetisaurus-0.7.8.tgz
+wget http://phonetisaurus.googlecode.com/files/g014b2b.tgz
 {% endhighlight %}
 
-Comment this line in sudo vim /etc/default/udhcpd:
+Untar the downloads:
 
 {% highlight bash %}
-#DHCPD_ENABLED="no"
+tar -xvf m2m-aligner-1.2.tar.gz
+tar -xvf openfst-1.3.3.tar.gz
+tar -xvf phonetisaurus-0.7.8.tgz
+tar -xvf mitlm-0.4.1.tar.gz
+tar -xvf g014b2b.tgz
 {% endhighlight %}
 
-Then run:
+Build OpenFST:
 
 {% highlight bash %}
-sudo ifconfig wlan0 192.168.42.1
+cd openfst-1.3.3/
+sudo ./configure --enable-compact-fsts --enable-const-fsts --enable-far --enable-lookahead-fsts --enable-pdt
+sudo make install # come back after a really long time
 {% endhighlight %}
 
-Run `crontab -e`, then add the following line:
+Build M2M:
 
 {% highlight bash %}
-*/1 * * * * ping -c 1 google.com
+cd m2m-aligner-1.2/
+sudo make
 {% endhighlight %}
 
-That's it! Next, we will install some binaries that Jasper requires.
-
-<h2 class="linked" id='install-binaries'><a href="#install-binaries" title="Permalink to this headline">Install Binaries</a></h2>
-
-Download the [/usr/local/bin binaries](https://sourceforge.net/projects/jasperproject/files/usrlocalbin_binaries.tar.gz/download) to your computer and run `mkdir ~/bin` on your Pi. On your computer, navigate to where you downloaded the binaries and run the following, replacing the IP address of your Pi, if appropriate:
+Build MITLMT:
 
 {% highlight bash %}
-scp * pi@192.168.2.3:./bin/
+cd mitlm-0.4.1/
+sudo ./configure
+sudo make install
 {% endhighlight %}
 
-Then on your Pi run the following:
+Build Phonetisaurus:
 
 {% highlight bash %}
-cd ~/bin
-sudo cp * /usr/local/bin/
+cd phonetisaurus-0.7.8/
+cd src
+sudo make
 {% endhighlight %}
 
-Now we repeat the process for the [/usr/local/lib binaries](https://sourceforge.net/projects/jasperproject/files/usrlocallib_binaries.tar.gz/download) and [phonetisaurus binaries](https://sourceforge.net/projects/jasperproject/files/phonetisaurus_binaries.tar.gz/download).
+Move some of the compiled files:
 
 {% highlight bash %}
-mkdir ~/lib # run on your Pi
-scp * pi@192.168.2.3:./lib/ # run from where you downloaded the binaries
-sudo cp * /usr/local/lib/ # run on your Pi
-
-mkdir phonetisaurus # run on the Pi
-scp * pi@192.168.2.3:./phonetisaurus/ # run from where you downloaded the binaries
+sudo cp ~/m2m-aligner-1.2/m2m-aligner /usr/local/bin/m2m-aligner
+sudo cp ~/phonetisaurus-0.7.8/phonetisaurus-g2p /usr/local/bin/phonetisaurus-g2p
 {% endhighlight %}
 
-Set permissions everywhere on the Pi:
+Build Phonetisaurus model:
 
 {% highlight bash %}
-sudo chmod 777 /etc/network/interfaces
-sudo chmod 777 -R *
+cd g014b2b/
+./compile-fst.sh
+{% endhighlight %}
+
+Finally, rename the following folder for convenience:
+
+{% highlight bash %}
+mv ~/g014b2b ~/phonetisaurus
 {% endhighlight %}
 
 At this point, we've installed Jasper and all the necessary software to run it. Before we start playing around, though, we need to configure Jasper and provide it with some basic information.
@@ -251,6 +254,7 @@ git clone https://github.com/jasperproject/jasper-client.git jasper
 Jasper requires various Python libraries that we can install in one line with:
 
 {% highlight bash %}
+sudo pip install --upgrade setuptools
 sudo pip install -r jasper/client/requirements.txt
 {% endhighlight %}
 
@@ -260,6 +264,13 @@ Run `crontab -e`, then add the following line, if it's not there already:
 @reboot /home/pi/jasper/boot/boot.sh;
 {% endhighlight %}
 
+Set permissions inside the home directory:
+
+{% highlight bash %}
+sudo chmod 777 -R *
+{% endhighlight %}
+
+Restart your Raspberry Pi. Doing so will run `boot.py`, which generates the `languagemodel.lm` file in the `client/` folder.
 
 <h3 class="linked" id='generating-profile'><a href="#generating-profile" title="Permalink to this headline">Generating a user profile</a></h3>
 
@@ -303,7 +314,7 @@ To enable Facebook integration, Jasper requires an API key. Unfortunately, this 
 1. Go to [https://developers.facebook.com](https://developers.facebook.com) and select 'Apps', then 'Create a new app'.
 2. Give your app a name, category, etc. The choices here are arbitrary.
 3. Go to the [Facebook Graph API Explorer](https://developers.facebook.com/tools/explorer/) and select your App from the drop down list in the top right (the default choice is 'Graph API Explorer').
-4. Hit 'Get Access Token' with the default permissions.
+4. Click 'Get Access Token' and in the popup click 'Extended Permissions' and make sure 'manage_notifications' is checked. Now click 'Get Access Token' to get your token.
 5. Take the resulting API key and add it to _profile.yml_ in the following format:
 
         ...
@@ -388,7 +399,7 @@ Upon restarting your Jasper, you should be able to issue a "Spotify" command tha
 
 Having installed the required libraries, it is worth taking a moment to understand how they interact and how the client code is architected.
 
-Jasper utilizes a number of open source libraries to function. [Pocketsphinx](http://cmusphinx.sourceforge.net/2010/03/pocketsphinx-0-6-release/) performs speech recognition via Python bindings to the [CMUSphinx](http://cmusphinx.sourceforge.net) engine. Jasper’s voice is owed to the popular TTS program, [eSpeak](http://espeak.sourceforge.net). [Phonetisaurus](https://code.google.com/p/phonetisaurus/) and CMUCLMTK enable Jasper to generate dictionaries and language models on-the-fly based on the custom module vocabularies. HostAPD helps to broadcast an ad-hoc wireless network to assist wifi configuration. Mopidy enables streaming from Spotify, for those users who wish to use the module.
+Jasper utilizes a number of open source libraries to function. [Pocketsphinx](http://cmusphinx.sourceforge.net/2010/03/pocketsphinx-0-6-release/) performs speech recognition via Python bindings to the [CMUSphinx](http://cmusphinx.sourceforge.net) engine. Jasper’s voice is owed to the popular TTS program, [eSpeak](http://espeak.sourceforge.net). [Phonetisaurus](https://code.google.com/p/phonetisaurus/) and CMUCLMTK enable Jasper to generate dictionaries and language models on-the-fly based on the custom module vocabularies. Mopidy enables streaming from Spotify, for those users who wish to use the module.
 
 The client architecture is organized into a number of different components:
 
